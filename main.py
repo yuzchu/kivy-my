@@ -22,7 +22,7 @@ MDScreen:
             app.apply_styles("Light") if (not app.theme_cls.theme_style == "Light") else app.apply_styles("Dark")
 
         MDButtonText:
-            text: 'Hello, World!'
+            text: '我的!'
 """
         AppScreen = Builder.load_string(self.appKv)
         self.apply_styles("Light")
