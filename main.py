@@ -1,292 +1,148 @@
-from kivy.core.window import Window
-from kivy.lang import Builder
+import os
+import shutil
+import logging
+from kivy.config import Config
+from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.boxlayout import BoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.toast import toast
+from android.permissions import request_permissions, Permission, check_permission
 
-from kivymd.app import MDApp
-from kivymd.uix.screen import MDScreen
-from kivymd.utils.set_bars_colors import set_bars_colors
-
-import sys
-from pathlib import Path
-
-# 添加热更新系统路径
-sys.path.insert(0, str(Path(__file__).parent))
-from hot_reload import HotReloadSystem, get_system
-
-
-class SampleApp(MDApp):
-
-    def __init__(self, **kwargs) -> None:
-        super(SampleApp, self).__init__(**kwargs)
-        self.theme_cls.primary_palette = "Darkblue"
+class DebugButton(BoxLayout):
+    """调试工具按钮，整合调试功能"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'vertical'
+        self.spacing = 10
+        self.padding = 20
         
-        # 初始化热更新系统
-        self.hot_reload_system = None
-        self._init_hot_reload()
-
-    def _init_hot_reload(self):
-        """初始化热更新系统"""
-        try:
-            # 创建热更新系统实例
-            self.hot_reload_system = HotReloadSystem()
-            
-            # 添加示例模块到配置
-            example_path = Path(__file__).parent / "hot_reload" / "example_module.py"
-            if example_path.exists():
-                self.hot_reload_system.config_manager.add_module(
-                    name="example_module",
-                    path=str(example_path),
-                    enabled=True
-                )
-            
-            print("[App] 热更新系统初始化完成")
-            
-        except Exception as e:
-            print(f"[App] 热更新系统初始化失败: {e}")
-
-    def build(self) -> MDScreen:
-        self.appKv="""
-MDScreen:
-    MDBoxLayout:
-        orientation: 'vertical'
-        spacing: dp(20)
-        padding: dp(20)
-        
-        MDLabel:
-            text: 'Python代码热更新演示'
-            halign: 'center'
-            font_style: 'H4'
-            size_hint_y: None
-            height: dp(60)
-        
-        MDBoxLayout:
-            orientation: 'vertical'
-            spacing: dp(10)
-            
-            MDRaisedButton:
-                id: btn_toggle_theme
-                style: 'tonal'
-                text: '切换主题'
-                on_press:
-                    app.apply_styles("Light") if (not app.theme_cls.theme_style == "Light") else app.apply_styles("Dark")
-            
-            MDRaisedButton:
-                id: btn_start_hot_reload
-                text: '启动热更新系统'
-                on_press: app.start_hot_reload()
-            
-            MDRaisedButton:
-                id: btn_stop_hot_reload
-                text: '停止热更新系统'
-                on_press: app.stop_hot_reload()
-                disabled: True
-            
-            MDRaisedButton:
-                id: btn_open_ui
-                text: '打开热更新管理界面'
-                on_press: app.open_hot_reload_ui()
-            
-            MDRaisedButton:
-                id: btn_run_demo
-                text: '运行热更新演示'
-                on_press: app.run_hot_reload_demo()
-        
-        MDBoxLayout:
-            orientation: 'vertical'
-            spacing: dp(10)
-            
-            MDLabel:
-                text: '热更新系统状态'
-                halign: 'center'
-                font_style: 'H6'
-                size_hint_y: None
-                height: dp(40)
-            
-            MDLabel:
-                id: lbl_status
-                text: '未启动'
-                halign: 'center'
-                theme_text_color: 'Secondary'
-        
-        MDBoxLayout:
-            orientation: 'horizontal'
-            spacing: dp(10)
-            size_hint_y: None
-            height: dp(40)
-            
-            MDRaisedButton:
-                text: '测试计算器'
-                on_press: app.test_calculator()
-            
-            MDRaisedButton:
-                text: '重载示例模块'
-                on_press: app.reload_example_module()
-"""
-        AppScreen = Builder.load_string(self.appKv)
-        self.apply_styles("Light")
-        
-        # 设置热更新系统状态标签
-        self.status_label = AppScreen.ids.lbl_status
-        
-        return AppScreen
-
-    def apply_styles(self, style: str = "Light") -> None:
-        self.theme_cls.theme_style = style
-        if style == "Light":
-            Window.clearcolor = status_color = nav_color = self.theme_cls.surfaceColor
-            style = "Dark"
-        else:
-            Window.clearcolor = status_color = nav_color = self.theme_cls.surfaceColor
-            style = "Light"
-        self.set_bars_colors(status_color, nav_color, style)
-
-    def set_bars_colors(self, status_color: list[float] = [1.0, 1.0, 1.0, 1.0], nav_color: list[float] = [1.0, 1.0, 1.0, 1.0], style: str = "Dark") -> None:
-        set_bars_colors(
-            status_color,  # status bar color
-            nav_color,  # navigation bar color
-            style,  # icons style of status and navigation bar
+        # 创建标签
+        self.label = MDLabel(
+            text="调试工具第三.15版",
+            halign="center",
+            font_style="H6"
         )
-
-    def start_hot_reload(self):
-        """启动热更新系统"""
-        if self.hot_reload_system:
-            try:
-                self.hot_reload_system.start()
-                self.status_label.text = "热更新系统运行中"
-                self.root.ids.btn_start_hot_reload.disabled = True
-                self.root.ids.btn_stop_hot_reload.disabled = False
-                
-                # 显示通知
-                from kivymd.uix.snackbar import Snackbar
-                Snackbar(text="热更新系统已启动", duration=2).open()
-                
-                print("[App] 热更新系统已启动")
-                
-            except Exception as e:
-                self.status_label.text = f"启动失败: {str(e)}"
-                print(f"[App] 热更新系统启动失败: {e}")
-
-    def stop_hot_reload(self):
-        """停止热更新系统"""
-        if self.hot_reload_system:
-            try:
-                self.hot_reload_system.stop()
-                self.status_label.text = "热更新系统已停止"
-                self.root.ids.btn_start_hot_reload.disabled = False
-                self.root.ids.btn_stop_hot_reload.disabled = True
-                
-                # 显示通知
-                from kivymd.uix.snackbar import Snackbar
-                Snackbar(text="热更新系统已停止", duration=2).open()
-                
-                print("[App] 热更新系统已停止")
-                
-            except Exception as e:
-                self.status_label.text = f"停止失败: {str(e)}"
-                print(f"[App] 热更新系统停止失败: {e}")
-
-    def open_hot_reload_ui(self):
-        """打开热更新管理界面"""
+        self.add_widget(self.label)
+        
+        # 创建按钮
+        self.button = MDRaisedButton(
+            text="执行调试操作",
+            size_hint=(1, None),
+            height=50,
+            on_release=self.execute_debug
+        )
+        self.add_widget(self.button)
+        
+        # 状态标签
+        self.status_label = MDLabel(
+            text="就绪",
+            halign="center",
+            theme_text_color="Secondary"
+        )
+        self.add_widget(self.status_label)
+        
+        # 初始化变量
+        self.DEBUG = '000debug2'
+        self.SDMAIN = f'/sdcard/{self.DEBUG}/main.py'
+        self.DEBGPATH = f'/sdcard/{self.DEBUG}'
+        self.ROOT = os.getcwd()
+        self.LOG_PATH = f'/sdcard/{self.DEBUG}/log'
+    
+    def execute_debug(self, *args):
+        """执行调试操作"""
         try:
-            from hot_reload_ui import HotReloadApp
+            self.status_label.text = "正在执行调试操作..."
             
-            # 创建并运行热更新UI应用
-            ui_app = HotReloadApp()
+            # 请求权限
+            request_permissions([Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
             
-            # 注意：在Android应用中，可能需要使用不同的方式打开新窗口
-            # 这里简化处理，直接运行演示
-            print("[App] 打开热更新管理界面")
-            
-            # 显示提示
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text="请查看控制台输出的热更新演示", duration=3).open()
-            
-            # 运行演示
-            self.run_hot_reload_demo()
-            
-        except Exception as e:
-            print(f"[App] 打开热更新UI失败: {e}")
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text=f"打开界面失败: {str(e)}", duration=3).open()
-
-    def run_hot_reload_demo(self):
-        """运行热更新演示"""
-        try:
-            from hot_reload.demo import main
-            
-            # 运行演示
-            print("[App] 开始运行热更新演示...")
-            main()
-            
-            # 显示完成通知
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text="热更新演示已完成，请查看控制台输出", duration=3).open()
-            
-        except Exception as e:
-            print(f"[App] 运行热更新演示失败: {e}")
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text=f"运行演示失败: {str(e)}", duration=3).open()
-
-    def test_calculator(self):
-        """测试计算器功能"""
-        try:
-            if self.hot_reload_system and self.hot_reload_system.is_running:
-                # 获取示例模块
-                module = self.hot_reload_system.manager.loaded_modules.get('example_module', {}).get('module')
+            # 检查调试目录是否存在
+            if os.path.exists(self.DEBGPATH):
+                # 清理日志目录
+                self._del_files(self.LOG_PATH)
                 
-                if module:
-                    # 使用计算器
-                    calc = module.Calculator("应用计算器")
-                    result1 = calc.add(100, 50)
-                    result2 = calc.multiply(10, 5)
+                # 设置Kivy日志配置
+                Config.set('kivy', 'log_dir', f'/sdcard/{self.DEBUG}/log')
+                
+                # 确保main.py文件存在
+                if not os.path.exists(self.SDMAIN):
+                    with open(self.SDMAIN, 'w') as file:
+                        file.close()
+                    logging.info('文件不存在,新建空文件')
+                
+                # 复制调试文件到当前目录
+                self._copyDir(self.DEBGPATH, self.ROOT)
+                
+                # 比较main.py文件内容
+                if os.path.exists('main.py') and os.path.exists(self.SDMAIN):
+                    with open('main.py', 'rb') as file:
+                        lastfile = file.read().decode('utf8', errors='ignore')
+                    with open(self.SDMAIN, 'rb') as file:
+                        newfile = file.read().decode('utf8', errors='ignore')
                     
-                    # 显示结果
-                    from kivymd.uix.dialog import MDDialog
-                    dialog = MDDialog(
-                        title="计算器测试",
-                        text=f"加法: 100 + 50 = {result1}\\n乘法: 10 × 5 = {result2}\\n历史记录: {calc.get_history()}",
-                        buttons=[
-                            MDFlatButton(text="确定", on_release=lambda x: dialog.dismiss())
-                        ]
-                    )
-                    dialog.open()
-                else:
-                    from kivymd.uix.snackbar import Snackbar
-                    Snackbar(text="请先启动热更新系统并加载示例模块", duration=3).open()
+                    if lastfile != newfile:
+                        # 删除main.pyc文件（如果存在）
+                        pyc_file = 'main.pyc'
+                        if os.path.exists(pyc_file):
+                            os.remove(pyc_file)
+                            self.status_label.text = "已删除main.pyc文件"
+                
+                toast('调试操作完成！')
+                self.status_label.text = "调试操作完成"
+                
             else:
-                from kivymd.uix.snackbar import Snackbar
-                Snackbar(text="请先启动热更新系统", duration=3).open()
+                toast('调试目录不存在')
+                self.status_label.text = "调试目录不存在"
                 
         except Exception as e:
-            print(f"[App] 测试计算器失败: {e}")
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text=f"测试失败: {str(e)}", duration=3).open()
-
-    def reload_example_module(self):
-        """重载示例模块"""
-        try:
-            if self.hot_reload_system and self.hot_reload_system.is_running:
-                self.hot_reload_system.reload_module("example_module")
-                
-                from kivymd.uix.snackbar import Snackbar
-                Snackbar(text="示例模块已重载", duration=2).open()
-                
-                print("[App] 示例模块已重载")
+            self.status_label.text = f"错误: {str(e)}"
+            toast(f'执行出错: {str(e)}')
+    
+    def _del_files(self, dir_path):
+        """递归删除文件或目录"""
+        if os.path.isfile(dir_path):
+            try:
+                os.remove(dir_path)
+            except Exception as e:
+                print(f"删除文件错误: {e}")
+        elif os.path.isdir(dir_path):
+            file_lis = os.listdir(dir_path)
+            for file_name in file_lis:
+                tf = os.path.join(dir_path, file_name)
+                self._del_files(tf)
+        print('清理完成')
+    
+    def _copyDir(self, srcDir, dstDir):
+        """递归复制目录"""
+        if not os.path.exists(srcDir):
+            print(f"源目录不存在: {srcDir}")
+            return
+        
+        if not os.path.exists(dstDir):
+            shutil.copytree(srcDir, dstDir)
+            return
+        
+        lists = os.listdir(srcDir)
+        for lt in lists:
+            srcPath = os.path.join(srcDir, lt)
+            goalPath = os.path.join(dstDir, lt)
+            
+            if os.path.isfile(srcPath):
+                try:
+                    shutil.copyfile(srcPath, goalPath)
+                except Exception as e:
+                    print(f"复制文件错误 {srcPath} -> {goalPath}: {e}")
             else:
-                from kivymd.uix.snackbar import Snackbar
-                Snackbar(text="请先启动热更新系统", duration=3).open()
-                
-        except Exception as e:
-            print(f"[App] 重载示例模块失败: {e}")
-            from kivymd.uix.snackbar import Snackbar
-            Snackbar(text=f"重载失败: {str(e)}", duration=3).open()
-
-    def on_stop(self):
-        """应用停止时清理"""
-        if self.hot_reload_system and self.hot_reload_system.is_running:
-            self.hot_reload_system.stop()
-            print("[App] 应用停止，热更新系统已清理")
+                self._copyDir(srcPath, goalPath)
 
 
+# 使用示例
 if __name__ == "__main__":
-    app = SampleApp()
-    app.run()
+    from kivy.app import App
+    
+    class DebugApp(App):
+        def build(self):
+            return DebugButton()
+    
+    DebugApp().run()
