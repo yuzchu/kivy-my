@@ -1,12 +1,21 @@
-# Sample repository at https://github.com/Novfensec/SAMPLE-KIVYMD-APP
-# Tic Tac Toe Game at https://github.com/Novfensec/Tic-Tac-Toe-Android
-
 name: Android Build
+
+# 设置工作流权限
+permissions:
+  contents: write  # 允许创建releases
+  packages: read   # 允许读取包
 
 on:
   push:
     branches:
       - main
+    tags: [ 'v*' ]
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 1,15 * *'
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build:
@@ -125,7 +134,63 @@ jobs:
         # yes | buildozer -v android release
         # run this for generating aab (Android App Bundle) [Required by google play]
 
-      # Upload artifacts
+      # Get current date for release tag
+      - name: Get current date
+        id: date
+        run: |
+          echo "date=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_ENV
+          echo "date=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      # Find the generated APK file
+      - name: Find APK file
+        id: find-apk
+        run: |
+          APK_FILE=$(find bin -name "*.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ]; then
+            echo "apk_file=$APK_FILE" >> $GITHUB_OUTPUT
+            echo "apk_filename=$(basename $APK_FILE)" >> $GITHUB_OUTPUT
+          else
+            echo "No APK file found in bin directory"
+            exit 1
+          fi
+      # 发布到GitHub Releases（针对tag推送）
+      - name: Create GitHub Release for tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.find-apk.outputs.apk_file }}
+          generate_release_notes: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 发布到GitHub Releases（针对main分支推送）
+      - name: Create GitHub Release for main branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.find-apk.outputs.apk_file }}
+          tag_name: "build-${{ github.run_number }}-${{ env.date }}"
+          name: "Build #${{ github.run_number }} - ${{ github.sha }}"
+          body: |
+            ## Build Information
+            - **Build Number:** ${{ github.run_number }}
+            - **Commit:** ${{ github.sha }}
+            - **Branch:** ${{ github.ref_name }}
+            - **Event:** ${{ github.event_name }}
+            - **Build Date:** ${{ env.date }}
+            ## Changes
+            ${{ github.event.head_commit.message }}
+            
+            ## APK Files
+            - Debug APK: Automatically attached
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload artifacts to workflow
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -133,3 +198,19 @@ jobs:
           path: |
             bin/*.apk
             bin/*.aab
+      # Send mail notification (disabled until EMAIL_PASSWORD secret is configured)
+      - name: Send mail
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.189.cn
+          server_port: 465
+          username: 18132128919@189.cn
+          password: lG)4gG)1A%8dZ@2q
+          subject: Github Actions job result
+          to: 617976182@qq.com
+          from: 18132128919@189.cn
+          secure: true
+          body: Build job of ${{github.repository}} completed successfully! APK has been released.
+          attachments: ${{ steps.find-apk.outputs.apk_file }}
+          priority: normal
+          ignore_cert: true
