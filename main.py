@@ -1,4 +1,3 @@
-
 DEBUG='000debug2'
 SDMAIN=f'/sdcard/{DEBUG}/main.py'
 DEBUGPATH=f'/sdcard/{DEBUG}'
